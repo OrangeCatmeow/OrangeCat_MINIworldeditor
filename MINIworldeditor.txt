@@ -1,0 +1,2045 @@
+local pos1
+local pos2
+--操作方块方向
+local Towards = 0
+--曲线关键点
+--笔刷参数
+local brushParameter = {
+    radius = nil,--半径
+    blockid = nil,--方块id
+    percentage = nil,--百分比
+    Temperature = nil,--冷暖
+    Lightness = nil,--明度
+    mode = nil--模式
+}
+local Digital_storage = {0,0,0,0,0,0,0,0,0,0}--数字版存储
+local loft_period = {}--loft点存储
+local period = {}--line点存储
+local gmask = {}--蒙版
+local Pasteboard ={}--copy本身存储
+local player_copypaste = {}--玩家copy时的坐标
+local quash = {}--undo存储
+local revert = {}--撤回上次撤回
+local Brush_color_1 = {
+    {{677,10},{681,0},{673,12},{672,10},{671,8},{670,6},{669,4},{668,2},{668,1}},
+    {{676,1},{674,15},{673,13},{672,11},{671,9},{670,7},{673,0},{668,3},{667,1}},
+    {{1970,0},{677,0},{673,14},{672,12},{669,0},{670,8},{669,6},{668,4},{667,2}},
+    {{1962,0},{675,1},{673,15},{672,13},{671,11},{670,9},{669,7},{1966,0},{667,3}},
+    {{1968,0},{675,2},{675,15},{672,14},{671,12},{670,10},{669,8},{668,6},{667,4}},
+    {{676,5},{675,3},{674,1},{678,0},{671,13},{670,11},{669,9},{670,0},{667,5}},
+    {{676,6},{675,4},{674,2},{669,5},{671,14},{670,12},{669,10},{668,8},{667,6}},
+    {{676,7},{675,5},{674,3},{673,1},{671,15},{670,13},{669,11},{668,9},{667,7}},
+    {{676,8},{675,6},{674,4},{673,2},{672,3},{670,14},{669,12},{668,10},{667,8}},
+    {{1971,0},{680,0},{674,5},{673,3},{672,1},{670,15},{669,13},{668,11},{667,9}},
+    {{676,10},{675,8},{674,6},{673,4},{672,2},{680,3},{669,14},{668,12},{667,10}},
+    {{1967,0},{675,9},{674,7},{673,5},{672,0},{671,1},{669,15},{668,13},{667,11}},
+    {{676,12},{675,10},{674,8},{673,6},{672,4},{671,2},{1964,0},{668,14},{667,12}},
+    {{676,13},{675,11},{674,9},{673,7},{672,5},{671,3},{670,1},{668,15},{667,13}},
+    {{676,14},{668,0},{674,10},{673,8},{672,6},{671,4},{670,2},{1965,0},{667,14}},
+    {{676,15},{675,13},{674,11},{673,9},{672,7},{671,5},{670,3},{669,1},{667,15}}
+}
+function playerMove(content,eventobjid)
+    local Move_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Move_1,number)
+    end
+    local move = Move_1[1]
+    local playerM = tonumber(Move_1[2])
+    if move == "@fly" then
+        Player:changPlayerMoveType(eventobjid,playerM)
+    end
+end
+function speed(content,eventobjid)
+    local Fly_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Fly_1,number)
+    end
+    local Speed = Fly_1[1]
+    local speed = tonumber(Fly_1[2])
+    if Speed == "@speed" then
+        if speed ~= nil then
+            Player:setAttr(eventobjid,10,speed)
+        end 
+    end
+end
+function blockid(x,y,z)
+    local result,arcid=Player:getCurToolID(0)
+    if arcid == 0 then
+        local result,id = Block:getBlockID(x,y,z)
+        local code, ret = Block:GetBlockDefName(id)
+        local result,data=Block:getBlockData(x,y,z)
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:"..ret.."/"..id.."属性id:"..data.."喵~")
+    end
+end
+function clear(content)
+    local Sel,nowSel = string.match(content,"(@[^%s]+)%s+(%w+)")
+    if Sel == "@clear" then
+        if nowSel == "pos" then
+            pos_vfx(0,0,0,3)
+            pos1 = nil
+            pos2 = nil
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:pos点已被清除喵~")
+        elseif nowSel == "line" then
+            line_vfx(0,0,0,2)
+            period = {}
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:line点已被清除喵~")
+        elseif nowSel == "mask" then
+            gmask ={}
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:mask已被清除喵~")
+        elseif nowSel == "id" then
+            Digital_storage = {0,0,0,0,0,0,0,0,0,0}
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:id数字板已被清除喵~")
+        elseif nowSel == "loft" then
+            loft_vfx(0,0,0,2)
+            loft_period = {}
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:loft点已被清除喵~")
+        elseif nowSel == "br" then
+            brushParameter = {
+                radius = nil,--半径
+                blockid = nil,--方块id
+                percentage = nil,--百分比
+                Temperature = nil,--冷暖
+                Lightness = nil,--明度
+                mode = nil--模式
+            }
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:brush信息已被清除喵~")
+        end
+    end
+end
+--设置pos点
+function pos_1(x,y,z)
+    local result,id=Player:getCurToolID(0)
+    if id == 12721 then
+        pos_vfx(x,y,z,1)
+        pos1 = {x,y,z}
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:设置pos1喵~\nx:"..math.floor(x).."\ny:"..math.floor(y).."\nz:"..math.floor(z))
+    elseif id == 12722 then
+        pos_vfx(x,y,z,2)
+        pos2 = {x,y,z}
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:设置pos2喵~\nx:"..math.floor(x).."\ny:"..math.floor(y).."\nz:"..math.floor(z))
+    end
+end
+function pos_2(eventobjid)
+    local result,itemid=Player:getCurToolID(eventobjid)
+    if itemid == 12721 then
+        local result,x,y,z=Actor:getEyePosition(eventobjid)
+        local result,dirx,diry,dirz=Actor:getFaceDirection(eventobjid)
+        for i = 1, 150, 1 do
+            x = x + dirx
+            y = y + diry
+            z = z + dirz
+            local result,id = Block:getBlockID(math.floor(x),math.floor(y),math.floor(z))
+            if id ~= 0 then
+                pos_vfx(x,y,z,1)
+                pos1 = {x,y,z}
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:设置pos1喵~\nx:"..math.floor(x).."\ny:"..math.floor(y).."\nz:"..math.floor(z))
+                break
+            end
+        end
+    elseif itemid == 12722 then
+        local result,x,y,z=Actor:getEyePosition(eventobjid)
+        local result,dirx,diry,dirz=Actor:getFaceDirection(eventobjid)
+        for i = 1, 150, 1 do
+            x = x + dirx
+            y = y + diry
+            z = z + dirz
+            local result,id = Block:getBlockID(math.floor(x),math.floor(y),math.floor(z))
+            if id ~= 0 then
+                pos_vfx(x,y,z,2)
+                pos2 = {x,y,z}
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:设置pos2喵~\nx:"..math.floor(x).."\ny:"..math.floor(y).."\nz:"..math.floor(z))
+                break
+            end
+        end
+    end
+end
+function pos_3(content,eventobjid)
+    local result,x,y,z=Actor:getPosition(eventobjid)
+    local Pos = string.match(content,"@[^%s]+")
+    if Pos == "@pos1" then
+        pos_vfx(x,y,z,1)
+        pos1 = {x,y,z}
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:设置pos1喵~\nx:"..math.floor(x).."\ny:"..math.floor(y).."\nz:"..math.floor(z))
+    elseif Pos == "@pos2" then
+        pos_vfx(x,y,z,2)
+        pos2 = {x,y,z}
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:设置pos2喵~\nx:"..math.floor(x).."\ny:"..math.floor(y).."\nz:"..math.floor(z))
+    end 
+end
+function pos_vfx(x,y,z,pos)
+    if pos == 1 then
+        if pos1 ~= nil then
+            World:stopEffectOnPosition(pos1[1],pos1[2],pos1[3],1315)
+        end
+        World:playParticalEffect(x,y,z,1315,1.5)
+    end
+    if pos == 2 then
+        if pos2 ~= nil then
+            World:stopEffectOnPosition(pos2[1],pos2[2],pos2[3],1316)
+        end
+        World:playParticalEffect(x,y,z,1316,1.5)
+    end
+    if pos == 3 then
+        if pos1 ~= nil then
+            World:stopEffectOnPosition(pos1[1],pos1[2],pos1[3],1315)
+        end
+        if pos2 ~= nil then
+            World:stopEffectOnPosition(pos2[1],pos2[2],pos2[3],1316)
+        end
+    end
+end
+--set功能
+function set(content)
+    local Set,blockid = string.match(content,"(@[^%s]+)%s+(.+)")
+    if Set == "@set" then
+        local newBlockid = setDigitalid(blockid)
+        if pos1 == nil or pos2 == nil then
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:未设置pos1/pos2喵~")
+        else
+            --范围选择
+            local min_x = math.min(pos1[1], pos2[1])
+            local max_x = math.max(pos1[1], pos2[1])
+            local min_y = math.min(pos1[2], pos2[2])
+            local max_y = math.max(pos1[2], pos2[2])
+            local min_z = math.min(pos1[3], pos2[3])
+            local max_z = math.max(pos1[3], pos2[3])
+            local undo_fanwei = {}
+            --撤回记录
+            for x = min_x, max_x, 1 do
+                for y = min_y, max_y, 1 do
+                    for z = min_z, max_z, 1 do
+                        local cc = undoMask(x,y,z)
+                        table.insert(undo_fanwei,cc)
+                    end
+                end
+            end
+            Record_revocation(undo_fanwei)
+            --范围操作
+            for x = min_x, max_x do
+                for y = min_y, max_y do
+                    for z = min_z, max_z do
+                        local id = newBlockid[math.random(1,#newBlockid)]
+                        setMask(x,y,z,id)
+                    end
+                end
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:set操作完成喵~")
+        end
+    end
+end
+--copy功能
+function copy(content,eventobjid)
+    if string.sub(content, 1, 5) == "@copy" then
+        if pos1 == nil or pos2 == nil then
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:未设置pos1/pos2喵~")
+        else
+            Pasteboard = {}
+            local result,x,y,z = Actor:getPosition(eventobjid)
+            player_copypaste = {math.floor(x),math.floor(y),math.floor(z)}
+            local min_x = math.min(pos1[1], pos2[1])
+            local max_x = math.max(pos1[1], pos2[1])
+            local min_y = math.min(pos1[2], pos2[2])
+            local max_y = math.max(pos1[2], pos2[2])
+            local min_z = math.min(pos1[3], pos2[3])
+            local max_z = math.max(pos1[3], pos2[3])
+            for x = min_x, max_x, 1 do
+                for y = min_y, max_y, 1 do
+                    for z = min_z, max_z, 1 do
+                        local result,id = Block:getBlockID(x,y,z)
+                        local result,data=Block:getBlockData(x,y,z)
+                        table.insert(Pasteboard,{originalId = id,x = x,y = y,z = z,Towards = data})
+                    end
+                end
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:copy复制完成喵~")
+        end
+    end
+end
+--paste功能
+-- function paste(content,eventobjid)
+--     if string.sub(content, 1,6) == "@paste" then
+--         if #Pasteboard == 0 then
+--             Chat:sendChat("粘贴板为空",0)
+--         else
+--             Chat:sendChat("粘贴完成",0)
+--             local result,x,y,z = Actor:getPosition(eventobjid)
+--             local neweventobjid = {math.floor(x+0.5),math.floor(y+0.5),math.floor(z+0.5)}
+--             local dx = neweventobjid[1] - player_copypaste[1]
+--             local dy = neweventobjid[2] - player_copypaste[2]
+--             local dz = neweventobjid[3] - player_copypaste[3]
+--             local undo_fanwei = {}
+--             for index, value in ipairs(Pasteboard) do
+--                 local newx = value[2] + dx
+--                 local newy = value[3] + dy
+--                 local newz = value[4] + dz
+--                 local newx,newy,newz = math.floor(newx+0.5),math.floor(newy+0.5),math.floor(newz+0.5)
+--                 local result,id = Block:getBlockID(math.floor(newx+0.5),math.floor(newy+0.5),math.floor(newz+0.5))
+--                 table.insert(undo_fanwei,{id,newx,newy,newz})
+--                 Block:placeBlock(value[1],newx,newy,newz,0)
+--                 print("paste撤回坐标记录"..id..","..newx..","..newy..","..newz)
+--             end
+--             Record_revocation(undo_fanwei)
+--         end
+--     end
+-- end
+--paste功能
+function paste(content, eventobjid)
+    if string.sub(content, 1, 6) == "@paste" then
+        if #Pasteboard == 0 then
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:paste粘贴板是nil喵~")
+        else
+            local result, x, y, z = Actor:getPosition(eventobjid)
+            local neweventobjid = {math.floor(x), math.floor(y), math.floor(z)}
+            local dx = neweventobjid[1] - player_copypaste[1]
+            local dy = neweventobjid[2] - player_copypaste[2]
+            local dz = neweventobjid[3] - player_copypaste[3]
+            local undo_fanwei = {}
+            --记录撤回操作
+            for index, value in ipairs(Pasteboard) do
+                local newx = value.x + dx
+                local newy = value.y + dy
+                local newz = value.z + dz
+                local cc = undoMask(newx,newy,newz)
+                table.insert(undo_fanwei, cc)
+            end
+            Record_revocation(undo_fanwei)
+            --执行paste
+            for index, value in ipairs(Pasteboard) do
+                local newx = value.x + dx
+                local newy = value.y + dy
+                local newz = value.z + dz
+                local newx, newy, newz = math.floor(newx), math.floor(newy), math.floor(newz)
+                local result,data=Block:getBlockData(newx,newy,newz)
+                pasteMask(newx,newy,newz,value.originalId,value.Towards)
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:paste粘贴完成喵~")
+        end
+    end
+end
+--rotate功能
+function rotate(content)
+    -- local Rotate,degress,axis = string.match(content,"(@[^%s]+)%s+(.+)%s+(%w)")
+    local Rotate_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Rotate_1,number)
+    end
+    local Rotate = Rotate_1[1]
+    local degress = Rotate_1[2]
+    local axis = Rotate_1[3]
+    if axis == nil then
+        axis = "y"
+    end
+    if Rotate == "@rotate" then
+        degress = tonumber(degress)
+        if degress ~= nil then
+            local cc = rotateAndRound(Pasteboard,player_copypaste,degress,axis)
+            Pasteboard = cc
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:rotate角度输入错误喵~")
+        end
+    end
+end
+function rotateAndRound(copypaste, player, degree, axis)--剪切板，copy时的位置，度数，哪个轴
+    -- 将角度转换为弧度
+    local radians = math.rad(degree)
+
+    -- 根据旋转轴创建旋转矩阵
+    local rotationMatrix
+    if axis == 'x' then
+        rotationMatrix = {
+            {1, 0,  0},
+            {0, math.cos(radians), -math.sin(radians)},
+            {0, math.sin(radians),  math.cos(radians)}
+        }
+    elseif axis == 'y' then
+        rotationMatrix = {
+            {math.cos(radians), 0, math.sin(radians)},
+            {0, 1, 0},
+            {-math.sin(radians), 0, math.cos(radians)}
+        }
+    elseif axis == 'z' then
+        rotationMatrix = {
+            {math.cos(radians), -math.sin(radians), 0},
+            {math.sin(radians),  math.cos(radians), 0},
+            {0, 0, 1}
+        }
+    else
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:rotate轴输入错误喵~")
+    end
+    if axis == "x" or axis == "y" or axis == "z" then
+                -- 旋转后的坐标表
+        local rotatedCopypaste = {}
+
+        -- 对每个坐标应用旋转
+        for _, point in ipairs(copypaste) do
+            local id, x, y, z , newTowards = point.originalId, point.x, point.y, point.z, point.Towards-- 提取坐标和id
+
+            -- 将点平移到原点
+            local relX, relY, relZ = x - player[1], y - player[2], z - player[3]
+
+            -- 应用旋转矩阵
+            local newRelX = rotationMatrix[1][1] * relX + rotationMatrix[1][2] * relY + rotationMatrix[1][3] * relZ
+            local newRelY = rotationMatrix[2][1] * relX + rotationMatrix[2][2] * relY + rotationMatrix[2][3] * relZ
+            local newRelZ = rotationMatrix[3][1] * relX + rotationMatrix[3][2] * relY + rotationMatrix[3][3] * relZ
+
+            -- 将点平移到原来的 player 位置
+            local newX, newY, newZ = newRelX + player[1], newRelY + player[2], newRelZ + player[3]
+
+            -- 四舍五入到最近的整数
+            newX, newY, newZ = math.floor(newX), math.floor(newY), math.floor(newZ)
+            -- 添加到旋转后的坐标表中
+            -- 新的表用于存储转换后的坐标对
+            local new_Brush_color_1 = {}
+            -- 遍历原始表并展平它
+            for _, innerTable in ipairs(Brush_color_1) do
+                for _, point in ipairs(innerTable) do
+                    -- 直接将点插入到新表中
+                    table.insert(new_Brush_color_1, point)
+                end
+            end
+            local found = true
+            for index, value in ipairs(new_Brush_color_1) do
+                if value[1] == id then
+                    found = false
+                    break
+                end
+            end
+            if found then
+                if axis == "y" then
+                    if tonumber(degree) >= 90 and tonumber(degree) <180 then
+                        if newTowards == 0 then newTowards = 3
+                        elseif newTowards == 1 then newTowards = 2
+                        elseif newTowards == 2 then newTowards = 0
+                        elseif newTowards == 3 then newTowards = 1
+                        elseif newTowards == 4 then newTowards = 7
+                        elseif newTowards == 5 then newTowards = 6
+                        elseif newTowards == 6 then newTowards = 4
+                        elseif newTowards == 7 then newTowards = 5
+                        end
+                    elseif tonumber(degree) >= 180 and tonumber(degree) <270 then
+                        if newTowards == 0 then newTowards = 1 
+                        elseif newTowards == 1 then newTowards = 0
+                        elseif newTowards == 2 then newTowards = 3
+                        elseif newTowards == 3 then newTowards = 2
+                        elseif newTowards == 4 then newTowards = 5
+                        elseif newTowards == 5 then newTowards = 4
+                        elseif newTowards == 6 then newTowards = 7
+                        elseif newTowards == 7 then newTowards = 6
+                        end
+                    elseif tonumber(degree) >= 270 and tonumber(degree) <360 then
+                        if newTowards == 0 then newTowards = 2
+                        elseif newTowards == 1 then newTowards = 3
+                        elseif newTowards == 2 then newTowards = 1
+                        elseif newTowards == 3 then newTowards = 0
+                        elseif newTowards == 4 then newTowards = 6
+                        elseif newTowards == 5 then newTowards = 7
+                        elseif newTowards == 6 then newTowards = 5
+                        elseif newTowards == 7 then newTowards = 4
+                        end
+                    elseif tonumber(degree) <= -90 and tonumber(degree) > -180 then
+                        if newTowards == 0 then newTowards = 2
+                        elseif newTowards == 1 then newTowards = 3
+                        elseif newTowards == 2 then newTowards = 1
+                        elseif newTowards == 3 then newTowards = 0
+                        elseif newTowards == 4 then newTowards = 6
+                        elseif newTowards == 5 then newTowards = 7
+                        elseif newTowards == 6 then newTowards = 5
+                        elseif newTowards == 7 then newTowards = 4
+                        end
+                    elseif tonumber(degree) <= -180 and tonumber(degree) > -270 then
+                        if newTowards == 0 then newTowards = 1 
+                        elseif newTowards == 1 then newTowards = 0
+                        elseif newTowards == 2 then newTowards = 3
+                        elseif newTowards == 3 then newTowards = 2
+                        elseif newTowards == 4 then newTowards = 5
+                        elseif newTowards == 5 then newTowards = 4
+                        elseif newTowards == 6 then newTowards = 7
+                        elseif newTowards == 7 then newTowards = 6
+                        end
+                    elseif tonumber(degree) <= -270 and tonumber(degree) > -360 then
+                        if newTowards == 0 then newTowards = 3
+                        elseif newTowards == 1 then newTowards = 2
+                        elseif newTowards == 2 then newTowards = 0
+                        elseif newTowards == 3 then newTowards = 1
+                        elseif newTowards == 4 then newTowards = 7
+                        elseif newTowards == 5 then newTowards = 6
+                        elseif newTowards == 6 then newTowards = 4
+                        elseif newTowards == 7 then newTowards = 5
+                        end
+                    end
+                end 
+            end
+            table.insert(rotatedCopypaste, {originalId = id,x = newX,y = newY,z = newZ,Towards = newTowards})
+        end
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:rotate粘贴板完成旋转,旋转角度为:"..degree.."轴:"..axis.."喵~")
+        return rotatedCopypaste
+    end
+end
+--undo功能
+--undo记录
+-- function Record_revocation(fanwei)
+--     table.insert(quash,fanwei)
+--     if #quash > 10 then
+--         table.remove(quash,1)
+--     end
+--     print("记录撤回"..",".."当前记录步数"..#quash)
+-- end
+-- --undo操作
+-- function undo(content)
+--     if string.sub(content, 1, 5) == "@undo" then
+--         if #quash < 1 then
+--             Chat:sendChat("无可撤回操作",0)
+--         else
+--             for index, value in ipairs(quash[#quash]) do
+--                 if value[1] == 0 then
+--                     Block:destroyBlock(value[2],value[3],value[4],false)
+--                 else
+--                     Block:placeBlock(value[1],value[2],value[3],value[4])
+--                 end
+--             end
+--             table.remove(quash)
+--             Chat:sendChat("撤回一段操作",0)
+--         end
+--     end
+-- end
+-- 撤回记录，记录放置和摧毁的方块信息
+function Record_revocation(undo_fanwei)
+    table.insert(quash, undo_fanwei)
+    if #quash > 50 then
+        table.remove(quash, 1)
+    end
+end
+function redo_(redo_fanwei)
+    local cc = {}
+    for index, value in ipairs(redo_fanwei) do
+        local result,id = Block:getBlockID(value.x,value.y,value.z)
+        local result,data=Block:getBlockData(value.x,value.y,value.z)
+        table.insert(cc,{originalId = id,Towards = data,x = value.x,y = value.y,z = value.z})
+    end
+    table.insert(revert,cc)
+    if #revert > 50 then
+        table.remove(revert, 1)
+    end
+end
+-- 撤回操作，根据记录的信息恢复状态
+function undo(content)
+    local Undo = string.match(content,"(@[^%s]+)")
+    if Undo == "@undo" then
+        if #quash < 1 then
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:undo无可撤回操作喵~")
+        else
+            local lastOperation = table.remove(quash)
+            redo_(lastOperation)
+            for _, op in ipairs(lastOperation) do
+                if op.originalId ~= 0 and op.originalId ~= nil then
+                    Block:setBlockAll(op.x,op.y,op.z,op.originalId,op.Towards)
+                elseif op.originalId == 0 or op.originalId == nil then
+                    Block:destroyBlock(op.x, op.y, op.z, false)
+                end
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:undo撤回操作完成,剩余步骤:",#quash,"喵~")
+        end
+    end
+end
+function redo(content)
+    local Redo = string.match(content,"(@[^%s]+)")
+    if Redo == "@redo" then
+        if #revert < 1 then
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:redo无可撤回操作喵~")
+        else
+            local lastOperation = table.remove(revert)
+            local cc = {}
+            for index, value in ipairs(lastOperation) do
+                local result,id = Block:getBlockID(value.x,value.y,value.z)
+                local result,data=Block:getBlockData(value.x,value.y,value.z)
+                table.insert(cc,{originalId = id,Towards = data,x = value.x,y = value.y,z = value.z})
+            end
+            table.insert(quash,cc)
+            for _, op in ipairs(lastOperation) do
+                if op.originalId ~= 0 and op.originalId ~= nil then
+                    Block:setBlockAll(op.x,op.y,op.z,op.originalId,op.Towards)
+                elseif op.originalId == 0 or op.originalId == nil then
+                    Block:destroyBlock(op.x, op.y, op.z, false)
+                end
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:redo撤回操作完成,剩余步骤:",#revert,"喵~")
+        end
+    end
+end
+--flip功能
+function flip(content,eventobjid)
+    -- local Flip,axis = string.match(content,"(@[^%s]+)%s+(%w+)")
+    local Flip_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Flip_1,number)
+    end
+    local Flip = Flip_1[1]
+    local axis = Flip_1[2]
+    if axis == nil then
+        local result,dir=Actor:getCurPlaceDir(eventobjid)
+        if dir == 2 or dir == 3 then
+            axis = "z"
+        elseif dir == 1 or dir == 0 then
+            axis = "x"
+        elseif dir == 4 or dir == 5 then
+            axis = "y"
+        end
+    end
+    if Flip == "@flip" then
+        if axis == "x" or axis == "y" or axis == "z" then
+            local cc = flipFanWei(Pasteboard,player_copypaste,axis)
+            Pasteboard = cc
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:flip轴输入错误喵~")
+        end
+    end
+end
+local function flip_transform(x, y, z, direction)
+    if direction == "x" then
+        return -x, y, z
+    elseif direction == "y" then
+        return x, -y, z
+    elseif direction == "z" then
+        return x, y, -z
+    else
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:flip轴输入错误喵~")
+    end
+end
+function flipFanWei(FanWei, playerPosition, Direction)
+    -- 翻转后的坐标存储表
+    local newFanWei = {}
+
+    -- 对每个坐标应用翻转变换
+    for _, point in ipairs(FanWei) do
+        local id, x, y, z, tow = point.originalId,point.x,point.y,point.z,point.Towards -- 提取方块id和坐标
+
+        -- 应用翻转变换，传递Direction作为额外的参数
+        local newX, newY, newZ = flip_transform(x - playerPosition[1], y - playerPosition[2], z - playerPosition[3], Direction)
+
+        -- 将翻转后的坐标偏移回原来的位置
+        newX = newX + playerPosition[1]
+        newY = newY + playerPosition[2]
+        newZ = newZ + playerPosition[3]
+        if Direction == "x" then
+            if tow == 0 then tow = 1
+            elseif tow == 1 then tow = 0
+            elseif tow == 4 then tow = 5
+            elseif tow == 5 then tow = 4
+            end
+        elseif Direction == "z" then
+            if tow == 2 then tow = 3
+            elseif tow == 3 then tow = 2
+            elseif tow == 6 then tow = 7
+            elseif tow == 7 then tow = 6
+            end
+        elseif Direction == "y" then
+            if tow == 0 then tow = 4
+            elseif tow == 1 then tow = 5
+            elseif tow == 2 then tow = 6
+            elseif tow == 3 then tow = 7
+            elseif tow == 4 then tow = 0
+            elseif tow == 5 then tow = 1
+            elseif tow == 6 then tow = 2
+            elseif tow == 7 then tow = 3
+            end
+        end
+        -- 添加到翻转后的坐标存储表
+        table.insert(newFanWei, {originalId = id,x = newX,y = newY,z = newZ,Towards = tow})
+    end
+    Chat:sendSystemMsg("#cFF7aad多利与橘喵:flip完成翻转喵~")
+    -- 返回翻转后的坐标存储表
+    return newFanWei
+end
+function sphere(content,eventobjid)
+    local Sphere,Radius,Blockid = string.match(content,"(@[^%s]+)%s+(%d+)%s+(.+)")
+    if Sphere == "@sphere" then
+        -- local newBlockid = {}
+        -- for number in string.gmatch(Blockid,"%d+") do
+        --     table.insert(newBlockid,tonumber(number))
+        -- end
+        local newBlockid = setDigitalid(Blockid)
+        Radius = tonumber(Radius)
+        if Radius ~= nil then
+            if newBlockid[1] ~= nil then
+                local undo_fanwei = {}
+                local newSphere = generateSphere(pos1,Radius)
+                for index, value in ipairs(newSphere) do
+                    local cc = undoMask(value[1],value[2],value[3])
+                    table.insert(undo_fanwei,cc)
+                end
+                Record_revocation(undo_fanwei)
+                for index, value in ipairs(newSphere) do
+                    local id = newBlockid[math.random(1,#newBlockid)]
+                    setMask(value[1],value[2],value[3],id)
+                end
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:sphere操作完成喵~")
+            elseif Blockid == nil then
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:sphere方块id输入错误喵~")
+            end
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:sphere半径输入错误喵~")
+        end
+    end
+
+end
+function generateSphere(playerPosition, radius)
+    if radius <= 0 then
+        print("Radius must be a positive integer.")
+    end
+
+    local spherePaste = {}
+    local maxDistance = radius * radius
+
+    for x = -radius, radius do
+        for y = -radius, radius do
+            for z = -radius, radius do
+                if (x * x) + (y * y) + (z * z) <= maxDistance then
+                    -- 计算球面上的整点坐标
+                    local pointX = playerPosition[1] + x
+                    local pointY = playerPosition[2] + y
+                    local pointZ = playerPosition[3] + z
+                    -- 假设方块id为box，这里用一个假设的值1代替
+                    table.insert(spherePaste, {pointX, pointY, pointZ})
+                end
+            end
+        end
+    end
+
+    return spherePaste
+end
+function stack(content,eventobjid)
+    -- local Stack,direction,frequency = string.match(content,"(@[^%s]+)%s+(%w)%s+(.+)")
+    local Stack_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Stack_1,number)
+    end
+    local Stack = Stack_1[1]
+    local frequency = Stack_1[2]
+    local direction = Stack_1[3]
+    if direction == nil then
+        local result,dir=Actor:getCurPlaceDir(eventobjid)
+        if dir == 0 then
+            direction = "e"
+        elseif dir == 1 then
+            direction = "w"
+        elseif dir == 2 then
+            direction = "n"
+        elseif dir == 3 then
+            direction = "s"
+        elseif dir == 4 then
+            direction = "u"
+        elseif dir == 5 then
+            direction = "d"
+        end
+    end
+    if Stack == "@stack" then
+        if direction == "n" or direction == "s" or direction == "w" or direction == "e" or direction == "u" or direction == "d" then
+            frequency = tonumber(frequency)
+            if frequency ~= nil and frequency >= 1 then
+                if pos1 ~= nil and pos2 ~= nil then
+                    local min_x = math.min(pos1[1], pos2[1])
+                    local max_x = math.max(pos1[1], pos2[1])
+                    local min_y = math.min(pos1[2], pos2[2])
+                    local max_y = math.max(pos1[2], pos2[2])
+                    local min_z = math.min(pos1[3], pos2[3])
+                    local max_z = math.max(pos1[3], pos2[3])
+                    local stack_fanwei = {}
+                    for x = min_x, max_x, 1 do
+                        for y = min_y, max_y, 1 do
+                            for z = min_z, max_z, 1 do
+                                local result,id = Block:getBlockID(x,y,z)
+                                local result,data=Block:getBlockData(x,y,z)
+                                table.insert(stack_fanwei,{id,x,y,z,data})
+                            end
+                        end
+                    end
+                    local newStack = stackFanWei(stack_fanwei,direction,frequency)
+                    local undo_fanwei = {}
+                    for index, value in ipairs(newStack) do
+                        local cc = undoMask(value.x,value.y,value.z)
+                        table.insert(undo_fanwei,cc)
+                    end
+                    Record_revocation(undo_fanwei)
+                    for index, value in ipairs(newStack) do
+                        pasteMask(value.x,value.y,value.z,value.id,value.tow)
+                    end
+                    Chat:sendSystemMsg("#cFF7aad多利与橘喵:stack操作完成喵~")
+                else
+                    Chat:sendSystemMsg("#cFF7aad多利与橘喵:pos1/pos2未设置喵~")
+                end
+            else
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:stack堆叠次数输入小于1喵~")
+            end 
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:stack方向轴入错误喵~")
+        end
+    end
+end
+function move(content,eventobjid)
+    local Move_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Move_1,number)
+    end
+    local Move = Move_1[1]
+    local frequency = Move_1[2]
+    local direction = Move_1[3]
+    if Move == "@move" then
+        if direction == nil then
+            local result,dir=Actor:getCurPlaceDir(eventobjid)
+            if dir == 0 then
+                direction = "e"
+            elseif dir == 1 then
+                direction = "w"
+            elseif dir == 2 then
+                direction = "n"
+            elseif dir == 3 then
+                direction = "s"
+            elseif dir == 4 then
+                direction = "u"
+            elseif dir == 5 then
+                direction = "d"
+            end
+        end
+        if direction == "n" or direction == "s" or direction == "w" or direction == "e" or direction == "u" or direction == "d" then
+            frequency = tonumber(frequency)
+            if frequency ~= nil then
+                local min_x = math.min(pos1[1], pos2[1])
+                local max_x = math.max(pos1[1], pos2[1])
+                local min_y = math.min(pos1[2], pos2[2])
+                local max_y = math.max(pos1[2], pos2[2])
+                local min_z = math.min(pos1[3], pos2[3])
+                local max_z = math.max(pos1[3], pos2[3])
+                local move_fanwei = {}
+                for x = min_x, max_x, 1 do
+                    for y = min_y, max_y, 1 do
+                        for z = min_z, max_z, 1 do
+                            local result,id = Block:getBlockID(x,y,z)
+                            local result,data=Block:getBlockData(x,y,z)
+                            table.insert(move_fanwei,{id =id,x = x,y = y,z = z,data = data})
+                        end
+                    end
+                end
+                local newMove = moveSelection(move_fanwei,direction,frequency)
+                local undo_fanwei = {}
+                for index, value in ipairs(newMove) do
+                    local cc = undoMask(value.x,value.y,value.z)
+                    table.insert(undo_fanwei,cc)
+                end
+                for index, value in ipairs(move_fanwei) do
+                    local cc = undoMask(value.x,value.y,value.z)
+                    table.insert(undo_fanwei,cc)
+                end
+                Record_revocation(undo_fanwei)
+
+                for index, value in ipairs(move_fanwei) do
+                    Block:destroyBlock(value.x,value.y,value.z,false)
+                end
+                for index, value in ipairs(newMove) do
+                    pasteMask(value.x,value.y,value.z,value.id,value.data)
+                end
+            end
+        end
+    end
+end
+function moveSelection(move_fanwei, direction, frequency)
+    -- 移动后的选区存储表
+    local newMove = {}
+
+    -- 根据direction确定偏移量
+    local offset = 0
+    if direction == "e" then
+        offset = frequency
+    elseif direction == "w" then
+        offset = -frequency
+    elseif direction == "n" then
+        offset = frequency
+    elseif direction == "s" then
+        offset = -frequency
+    elseif direction == "u" then
+        offset = frequency
+    elseif direction == "d" then
+        offset = -frequency
+    else
+        error("Invalid direction. Must be 'east', 'west', 'north', 'south', 'up', or 'down'.")
+    end
+
+    -- 遍历move_fanwei中的每个点并应用偏移
+    for _, point in ipairs(move_fanwei) do
+        local id, x, y, z ,data = point.id,point.x,point.y,point.z,point.data
+        -- 根据方向更新坐标
+        local newX, newY, newZ = x, y, z
+        if direction == "e" or direction == "w" then
+            newX = x + offset
+        elseif direction == "n" or direction == "s" then
+            newZ = z + offset
+        elseif direction == "u" or direction == "d" then
+            newY = y + offset
+        end
+        -- 将更新后的点添加到newMove中
+        table.insert(newMove, {id = id, x = newX, y = newY,z = newZ, data = data})
+    end
+
+    return newMove
+end
+function stackFanWei(FanWei, direction, frequency)
+    if frequency <= 0 then
+        error("Frequency must be a positive integer.")
+    end
+
+    local stackedFanWei = {}
+
+    -- 计算FanWei在各个轴上的范围
+    local minX, minY, minZ, maxX, maxY, maxZ = math.huge, math.huge, math.huge, -math.huge, -math.huge, -math.huge
+    for _, block in ipairs(FanWei) do
+        local id, x, y, z ,tow= unpack(block)
+        minX = math.min(minX, x)
+        minY = math.min(minY, y)
+        minZ = math.min(minZ, z)
+        maxX = math.max(maxX, x)
+        maxY = math.max(maxY, y)
+        maxZ = math.max(maxZ, z)
+    end
+
+    -- 计算FanWei在各个轴上的长度
+    local lengthX = maxX - minX
+    local lengthY = maxY - minY
+    local lengthZ = maxZ - minZ
+
+    -- 遍历原始FanWei中的每个方块，并进行堆叠
+    for _, block in ipairs(FanWei) do
+        local id, x, y, z, tow= unpack(block)
+        for i = 1, frequency do
+            -- 根据堆叠方向计算新坐标
+            local newX, newY, newZ
+            if direction == "e" then
+                newX = (x + i * lengthX)+i
+                newY = y
+                newZ = z
+            elseif direction == "w" then
+                newX = (x - i * lengthX)-i
+                newY = y
+                newZ = z
+            elseif direction == "n" then
+                newX = x
+                newY = y
+                newZ = (z + i * lengthZ)+i
+            elseif direction == "s" then
+                newX = x
+                newY = y
+                newZ = (z - i * lengthZ)-i
+            elseif direction == "u" then
+                newX = x
+                newY = (y + i * lengthY)+i
+                newZ = z
+            elseif direction == "d" then
+                newX = x
+                newY = (y - i * lengthY)-i
+                newZ = z
+            end
+
+            -- 添加堆叠后的方块到新表中
+            table.insert(stackedFanWei, {id = id,x = newX,y = newY,z = newZ,tow = tow})
+        end
+    end
+
+    return stackedFanWei
+end
+function smear(content,eventobjid)
+    -- local Smear,direction,frequency = string.match(content,"(@[^%s]+)%s+(%w)%s+(.+)")
+    local Stack_1 = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Stack_1,number)
+    end
+    local Smear = Stack_1[1]
+    local frequency = Stack_1[2]
+    local direction = Stack_1[3]
+    if direction == nil then
+        local result,dir=Actor:getCurPlaceDir(eventobjid)
+        if dir == 0 then
+            direction = "e"
+        elseif dir == 1 then
+            direction = "w"
+        elseif dir == 2 then
+            direction = "n"
+        elseif dir == 3 then
+            direction = "s"
+        elseif dir == 4 then
+            direction = "u"
+        elseif dir == 5 then
+            direction = "d"
+        end
+    end
+    if Smear == "@smear" then
+        if direction == "n" or direction == "s" or direction == "w" or direction == "e" or direction == "u" or direction == "d" then
+            frequency = tonumber(frequency)
+            if frequency ~= nil then
+                local min_x = math.min(pos1[1], pos2[1])
+                local max_x = math.max(pos1[1], pos2[1])
+                local min_y = math.min(pos1[2], pos2[2])
+                local max_y = math.max(pos1[2], pos2[2])
+                local min_z = math.min(pos1[3], pos2[3])
+                local max_z = math.max(pos1[3], pos2[3])
+                local smear_fanwei = {}
+                for x = min_x, max_x, 1 do
+                    for y = min_y, max_y, 1 do
+                        for z = min_z, max_z, 1 do
+                            local result,id = Block:getBlockID(x,y,z)
+                            local result,data=Block:getBlockData(x,y,z)
+                            table.insert(smear_fanwei,{id,x,y,z,data})
+                        end
+                    end
+                end
+                local newSmear = smearFanWei(smear_fanwei,direction,frequency)
+                local undo_fanwei = {}
+                for index, value in ipairs(newSmear) do
+                    local cc = undoMask(value[2],value[3],value[4])
+                    -- local result,id = Block:getBlockID(value[2],value[3],value[4])
+                    -- local result,data=Block:getBlockData(value[2],value[3],value[4])
+                    table.insert(undo_fanwei,cc)
+                end
+                Record_revocation(undo_fanwei)
+                for index, value in ipairs(newSmear) do
+                    pasteMask(value[2],value[3],value[4],value[1],value[5])
+                    -- Block:setBlockAll(value[2],value[3],value[4],value[1],value[5])
+                end
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:smear操作完成喵~")
+            else
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:smear堆叠次数输入错误喵~")
+            end
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:smear方向输入错误喵~")
+        end
+    end
+end
+function smearFanWei(FanWei, direction, frequency)
+    if frequency <= 0 then
+        error("Frequency must be a positive integer.")
+    end
+
+    local stackedFanWei = {}
+
+    -- 遍历原始FanWei中的每个方块，并进行堆叠
+    for _, block in ipairs(FanWei) do
+        local id, x, y, z, tow = unpack(block)
+        for i = 1, frequency do
+            -- 根据堆叠方向计算新坐标
+            local newX, newY, newZ
+            if direction == "e" then
+                newX = x + i
+                newY = y
+                newZ = z
+            elseif direction == "w" then
+                newX = x - i
+                newY = y
+                newZ = z
+            elseif direction == "n" then
+                newX = x
+                newY = y
+                newZ = z + i
+            elseif direction == "s" then
+                newX = x
+                newY = y
+                newZ = z - i
+            elseif direction == "u" then
+                newX = x
+                newY = y + i
+                newZ = z
+            elseif direction == "d" then
+                newX = x
+                newY = y - i
+                newZ = z
+            end
+
+            -- 添加堆叠后的方块到新表中
+            table.insert(stackedFanWei, {id, newX, newY, newZ, tow})
+        end
+    end
+
+    return stackedFanWei
+end
+function replace(content)
+    local Smear,id1,id2 = string.match(content,"(@[^%s]+)%s+(.+)%s+(.+)")
+    if Smear == "@replace" then
+        -- id1 = tonumber(id1)
+        if id1 ~= nil then
+            -- id2 = tonumber(id2)
+            if id2 ~=nil then
+                local min_x = math.min(pos1[1], pos2[1])
+                local max_x = math.max(pos1[1], pos2[1])
+                local min_y = math.min(pos1[2], pos2[2])
+                local max_y = math.max(pos1[2], pos2[2])
+                local min_z = math.min(pos1[3], pos2[3])
+                local max_z = math.max(pos1[3], pos2[3])
+                local replace_fanwei = {}
+                for x = min_x, max_x, 1 do
+                    for y = min_y, max_y, 1 do
+                        for z = min_z, max_z, 1 do
+                            local result,id = Block:getBlockID(x,y,z)
+                            table.insert(replace_fanwei,{id,x,y,z})
+                        end
+                    end
+                end
+                local newid1 = setDigitalid(id1)
+                local newBlockid = setDigitalid(id2)
+                local undo_fanwei = {}
+                for index, value in ipairs(replace_fanwei) do
+                    local cc = undoMask(value[2],value[3],value[4])
+                    table.insert(undo_fanwei,cc)
+                end
+                Record_revocation(undo_fanwei)
+                for index, value in ipairs(replace_fanwei) do
+                    for i, v in ipairs(newid1) do
+                        if value[1] == tonumber(v) then
+                            local newid2 = newBlockid[math.random(1,#newBlockid)]
+                            setMask(value[2],value[3],value[4],newid2)
+                        end 
+                    end
+                end
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:replace操作完成喵~")
+            else
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:replace替换方块输入错误喵~")
+            end
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:replace被替换方块输入错误喵~")
+        end
+    end
+
+end
+function cyl(content)
+    local Cyl,radius,height,blockid = string.match(content,"(@[^%s]+)%s+(%d+)%s+(%d+)%s+(.+)")
+    radius = tonumber(radius)
+    height = tonumber(height)
+    if Cyl == "@cyl" then
+        if radius ~= nil and height ~= nil then
+            local newBlockid = setDigitalid(blockid)
+            local newCyl = generateHollowCylinder(pos1,radius,height)
+            local undo_fanwei = {}
+            for index, value in ipairs(newCyl) do
+                local cc = undoMask(value[1],value[2],value[3])
+                table.insert(undo_fanwei,cc)
+            end
+            Record_revocation(undo_fanwei)
+            for index, value in ipairs(newCyl) do
+                local newBlockid = newBlockid[math.random(1,#newBlockid)]
+                setMask(value[1],value[2],value[3],newBlockid)
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:cyl完成操作喵~")
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:cyl半径或高度输入错误喵~")
+        end
+    end
+end
+function generateHollowCylinder(Dian, radius, height)
+    local FanWei = {}
+    local circlePoints = 1500 -- 圆周上的点数，可以根据需要调整以增加精度
+    for l = 1, radius, 1 do
+            -- 辅助函数，用于计算圆周上的点并添加到FanWei
+        local function addCirclePoints(y, l)
+            for i = 1, circlePoints do
+                local angle = (i - 1) * (2 * math.pi / circlePoints)
+                local x = Dian[1] + l * math.cos(angle)
+                local z = Dian[3] + l * math.sin(angle)
+                -- 四舍五入到最近的整数并添加到FanWei
+                table.insert(FanWei, {math.floor(x + 0.5), y, math.floor(z + 0.5)})
+            end
+        end
+
+        -- 生成圆柱体侧面的点
+        for h = 1, height do
+            local y = Dian[2] + h - 1 -- 圆柱体的层级高度
+            -- 由于侧面是连续的，我们只需要在层与层之间添加一圈点
+            addCirclePoints(y, l)
+        end
+    end
+
+    return FanWei
+end
+function hcyl(content)
+    local Hcyl,radius,height,blockid = string.match(content,"(@[^%s]+)%s+(%d+)%s+(%d+)%s+(.+)")
+    radius = tonumber(radius)
+    height = tonumber(height)
+    if Hcyl == "@hcyl" then
+        if radius ~= nil and height ~= nil then
+            local newBlockid = setDigitalid(blockid)
+            local newCyl = hcylFanWei(pos1,radius,height)
+            local undo_fanwei = {}
+            for index, value in ipairs(newCyl) do
+                local cc = undoMask(value[1],value[2],value[3])
+                -- local result,id = Block:getBlockID(value[1],value[2],value[3])
+                -- local result,data=Block:getBlockData(value[1],value[2],value[3])
+                table.insert(undo_fanwei,cc)
+            end
+            Record_revocation(undo_fanwei)
+            for index, value in ipairs(newCyl) do
+                local newBlockid = newBlockid[math.random(1,#newBlockid)]
+                setMask(value[1],value[2],value[3],newBlockid)
+                -- Block:setBlockAll(value[1],value[2],value[3],blockid,Towards)
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:hcyl完成操作喵~")
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:hcyl半径或高度输入错误喵~")
+        end
+    end
+end
+function hcylFanWei(Dian, radius, height)
+    local FanWei = {}
+    local circlePoints = 1500 -- 圆周上的点数，可以根据需要调整以增加精度
+
+    -- 辅助函数，用于计算圆周上的点并添加到FanWei
+    local function addCirclePoints(y)
+        for i = 1, circlePoints do
+            local angle = (i - 1) * (2 * math.pi / circlePoints)
+            local x = Dian[1] + radius * math.cos(angle)
+            local z = Dian[3] + radius * math.sin(angle)
+            -- 四舍五入到最近的整数并添加到FanWei
+            table.insert(FanWei, {math.floor(x + 0.5), y, math.floor(z + 0.5)})
+        end
+    end
+
+    -- 添加圆柱体底面的圆周点
+    addCirclePoints(Dian[2])
+
+    -- 添加圆柱体的侧面点
+    for h = 1, height-1 do
+        local y = Dian[2] + h - 1 -- 由于h从1开始，所以这里减1以匹配高度
+        -- 由于侧面是连续的，我们只需要在层与层之间添加一圈点
+        if h < height-1 then
+            addCirclePoints(y)
+        end
+        -- 对于每一层，我们添加四条边，连接上下层的对应点
+        for i = 1, circlePoints do
+            local current = (i - 1) * (2 * math.pi / circlePoints)
+            local next = i * (2 * math.pi / circlePoints)
+            local x1 = Dian[1] + radius * math.cos(current)
+            local z1 = Dian[3] + radius * math.sin(current)
+            local x2 = Dian[1] + radius * math.cos(next)
+            local z2 = Dian[3] + radius * math.sin(next)
+
+            -- 四舍五入到最近的整数并添加到FanWei
+            table.insert(FanWei, {math.floor(x1 + 0.5), y, math.floor(z1 + 0.5)})
+            table.insert(FanWei, {math.floor(x2 + 0.5), y + 1, math.floor(z2 + 0.5)})
+        end
+    end
+
+    -- 添加圆柱体顶面的圆周点
+    addCirclePoints(Dian[2] + height-1)
+
+    return FanWei
+end
+function setTowards(content)
+    local tow,newTowards = string.match(content,"(@[^%s]+)%s+(.+)")
+    if tow == "@t" then
+        if newTowards == "u_n" then
+            Towards = 3
+        elseif newTowards == "u_s" then
+            Towards = 2
+        elseif newTowards == "u_e" then
+            Towards = 1
+        elseif newTowards == "u_w" then
+            Towards = 0
+        elseif newTowards == "d_n" then
+            Towards = 7
+        elseif newTowards == "d_s" then
+            Towards = 6
+        elseif newTowards == "d_e" then
+            Towards = 5
+        elseif newTowards == "d_w" then
+            Towards = 4
+        else
+            Towards = 0
+        end
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:setTowards方块朝向操作完成喵~")
+    end
+end
+function setLine(x,y,z)
+    local result,id=Player:getCurToolID(0)
+    if id == 12723 then
+        line_vfx(x,y,z,1)
+        table.insert(period,{x,y,z})
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:line设置点,当前设置点"..#period.."喵~")
+    end
+end
+function setLine_2(content,eventobjid)
+    local Line1 = string.match(content,"@[^%s]+")
+    if Line1 == "@setline" then
+        local result,x,y,z=Actor:getPosition(eventobjid)
+        line_vfx(x,y,z,1)
+        table.insert(period,{x,y,z})
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:line设置点,当前设置点"..#period.."喵~")
+    end
+end
+function line_vfx(x,y,z,line)
+    if line == 1 then
+        World:playParticalEffect(x,y,z,1317,1)
+    end
+    if line == 2 then
+        for index, value in ipairs(period) do
+            World:stopEffectOnPosition(value[1],value[2],value[3],1317)
+        end
+    end
+end
+function line(content)
+    local Line1,Blockid = string.match(content,"(@[^%s]+)%s+(.+)")
+    local Line2 = string.match(content,"(@[^%s]+)")
+    if Line1 == "@line" then
+        if Blockid ~= nil then
+            local newBlockid = setDigitalid(Blockid)
+            Blockid = tonumber(Blockid)
+            local newLine = generateCurve(period)
+            local undo_fanwei = {}
+            for index, value in ipairs(newLine) do
+                local cc = undoMask(value[1],value[2],value[3])
+                table.insert(undo_fanwei,cc)
+            end
+            Record_revocation(undo_fanwei)
+            for index, value in ipairs(newLine) do
+                local newBlockid = newBlockid[math.random(1,#newBlockid)]
+                setMask(value[1],value[2],value[3],newBlockid)
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:line操作完成喵~")
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:line方块输入错误喵~")
+        end
+    end
+end
+function catmullRomSpline(p0, p1, p2, p3, t)
+    local t2 = t * t
+    local t3 = t2 * t
+
+    local x = (2 * p1[1] + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3) * 0.5
+    local y = (2 * p1[2] + (-p0[2] + p2[2]) * t + (2 * p0[2] - 5 * p1[2] + 4 * p2[2] - p3[2]) * t2 + (-p0[2] + 3 * p1[2] - 3 * p2[2] + p3[2]) * t3) * 0.5
+    local z = (2 * p1[3] + (-p0[3] + p2[3]) * t + (2 * p0[3] - 5 * p1[3] + 4 * p2[3] - p3[3]) * t2 + (-p0[3] + 3 * p1[3] - 3 * p2[3] + p3[3]) * t3) * 0.5
+
+    return {x, y, z}
+end
+function spike(content)
+    local Spike,radius,finishes = string.match(content,"(@[^%s]+)%s+(.+)%s+(.+)")
+    if Spike == "@spike" then
+        -- finishes = tonumber(finishes)
+        if finishes ~= nil then
+            local Radius = {}--存放原始半径信息
+            local newRadius = {}--所有原点的半径
+            local newSpike = {}--所有原点的坐标
+            local newBlock ={}--所有要操作的点
+            local newBlockid = setDigitalid(finishes)
+            for number in string.gmatch(radius,"%d+") do
+                table.insert(Radius,tonumber(number))
+            end
+            newSpike = generateCurve(period)
+            for i = 1, #Radius-1, 1 do
+                local cc = distributeNumbersToArray({Radius[i],Radius[i+1]},math.ceil(#newSpike/(#Radius-1)))
+                for index, value in ipairs(cc) do
+                    table.insert(newRadius,value)
+                end
+            end
+            --确定所有要操作的点
+            for index, value in ipairs(newSpike) do
+                local cc = generateSphere(value,tonumber(newRadius[index]))
+                for index, value in ipairs(cc) do
+                    table.insert(newBlock,value) 
+                end
+            end
+            newBlock = uniqueArray(newBlock)
+            local undo_fanwei = {}
+            for index, value in ipairs(newBlock) do
+                local cc = undoMask(value[1],value[2],value[3])
+                -- local result,id = Block:getBlockID(value[1],value[2],value[3])
+                -- local result,data=Block:getBlockData(value[1],value[2],value[3])
+                table.insert(undo_fanwei,cc)
+            end
+            Record_revocation(undo_fanwei)
+            for index, value in ipairs(newBlock) do
+                local id = newBlockid[math.random(1,#newBlockid)]
+                setMask(value[1],value[2],value[3],id)
+                -- Block:setBlockAll(value[1],value[2],value[3],finishes,Towards)
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:spike操作完成喵~")
+        else
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:spike方块输入错误喵~")
+        end
+    end
+end
+function distributeNumbersToArray(cc, dd)
+    function reverseArray(array)
+        local reversedArray = {}
+        for i = #array, 1, -1 do  -- 从数组的最后一个元素开始迭代到第一个
+            table.insert(reversedArray, array[i])  -- 将元素添加到新数组的末尾
+        end
+        return reversedArray
+    end
+    local yy = 1
+    local totalNumbers = 0
+    if cc[1] > cc[2] then
+        local dd =cc[1]
+        cc[1] =cc[2]
+        cc[2] =dd
+        yy =2
+    end
+    for i = cc[1], cc[#cc] do
+        totalNumbers = totalNumbers + 1
+    end
+
+    -- 计算每个数字理论上应该出现的次数
+    local occurrences = math.floor(dd / totalNumbers)
+
+    -- 创建一个数组来存储每个数字出现的次数
+    local occurrencesArray = {}
+    for i = 1, totalNumbers do
+        occurrencesArray[i] = occurrences
+    end
+
+    -- 分配剩余的数字（如果dd不能被totalNumbers整除）
+    local remainder = dd % totalNumbers
+    for i = 1, remainder do
+        occurrencesArray[i] = occurrencesArray[i] + 1
+    end
+
+    -- 根据occurrencesArray中的数字出现次数，构建最终的数组
+    local finalArray = {}
+    for number = cc[1], cc[#cc] do
+        local count = occurrencesArray[number - cc[1] + 1]
+        for i = 1, count do
+            table.insert(finalArray, number)
+        end
+    end
+    if yy == 1 then
+        return finalArray
+    elseif yy == 2 then
+        local ll = reverseArray(finalArray)
+        return ll
+    end
+end
+--清除数组内的重复
+function uniqueArray(inputArray)
+    local occurrences = {}  -- 记录每个数字出现的次数
+    local unique = {}      -- 存储最终结果的数组
+
+    -- 计算每个数字出现的次数
+    for _, value in ipairs(inputArray) do
+        if occurrences[value] then
+            occurrences[value] = occurrences[value] + 1
+        else
+            occurrences[value] = 1
+        end
+    end
+
+    -- 根据出现次数重建数组，只保留每个数字一次
+    for number, count in pairs(occurrences) do
+        table.insert(unique, number)
+    end
+
+    return unique
+end
+function generateCurve(period)
+    table.insert(period,period[#period])
+    local newPeriod = {}
+
+    -- 复制第一个锚点
+    table.insert(newPeriod, period[1])
+
+    -- 计算Catmull-Rom样条曲线
+    for i = 1, #period - 2 do
+        local p0 = period[i - 1] or period[i] -- 前一个锚点
+        local p1 = period[i]
+        local p2 = period[i + 1]
+        local p3 = period[i + 2] or p2      -- 后一个锚点
+
+        -- 根据需要添加曲线上的点，这里我们添加了10个点
+        for j = 1, 100 do
+            local t = j / 100
+            table.insert(newPeriod, catmullRomSpline(p0, p1, p2, p3, t))
+        end
+    end
+    table.remove(period,#period)
+    return newPeriod
+end
+--笔刷
+function setBrush(content)
+    local Brush,mode,parameter = string.match(content,"(@[^%s]+)%s+(%w+)%s+(.+)")
+    -- local Brush_1 = {}
+    -- for number in string.gmatch(content,"%S+") do
+    --     table.insert(Brush_1,number)
+    -- end
+    -- local Brush = Brush_1[1]
+    -- local mode = Brush_1[2]
+    -- local parameter = Brush_1[3]
+    if Brush == "@br" then
+        if mode == "sphere" then
+            local cc = {}
+            for number in string.gmatch(parameter,"%S+") do
+                table.insert(cc,number)
+            end
+            brushParameter.mode = mode
+            brushParameter.radius = tonumber(cc[1])
+            brushParameter.blockid = setDigitalid(cc[2])
+            cc[3] = tonumber(cc[3])
+            if cc[3] == nil then
+                brushParameter.percentage = 100
+            else
+                brushParameter.percentage = tonumber(cc[3])
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:brush球模式设置完成喵~")
+        elseif mode == "h" then
+            -- local newparameter = {}
+            -- for number in string.gmatch(parameter,"%w+") do
+            --     table.insert(newparameter,number)
+            -- end
+            -- brushParameter.mode = mode
+            -- if newparameter[1] == "l" or newparameter[1] == "r" then
+            --     brushParameter.Temperature = newparameter[1]
+            -- else
+            --     newparameter.Temperature = nil
+            -- end
+            -- brushParameter.radius = newparameter[2]
+            -- if newparameter[3] == nil then
+            --     brushParameter.percentage = 100
+            -- else
+            --     brushParameter.percentage = newparameter[3]
+            -- end
+            -- print("模式:",brushParameter.mode,"冷暖:",brushParameter.Temperature,"半径:",brushParameter.radius,"百分比:",brushParameter.percentage)
+        elseif mode == "b" then
+            local cc = {}
+            for number in string.gmatch(parameter,"%S+") do
+                table.insert(cc,number)
+            end
+            brushParameter.mode = mode
+            brushParameter.Lightness = cc[1]
+            brushParameter.radius = tonumber(cc[2])
+            if cc[3] == nil then
+                brushParameter.percentage = 100
+            else
+                brushParameter.percentage = tonumber(cc[3])
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:brush明度模式设置完成喵~")
+        elseif mode == "copy" then
+            brushParameter.mode = mode
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:brush剪贴板模式设置完成喵~")
+        end
+    end
+end
+function brush(eventobjid)
+    local result,itemid=Player:getCurToolID(eventobjid)
+    if itemid == 12724 then
+        local result,x,y,z=Actor:getEyePosition(eventobjid)
+        local result,dirx,diry,dirz=Actor:getFaceDirection(eventobjid)
+        for i = 0 ,100 do
+            x = x + dirx
+            y = y + diry
+            z = z + dirz
+            local result,id = Block:getBlockID(math.floor(x),math.floor(y),math.floor(z))
+            if id ~= 0 then
+                if brushParameter.mode == "sphere" then
+                    local newblockid = generateSphere({math.floor(x),math.floor(y),math.floor(z)},brushParameter.radius)
+                    local undo_fanwei = {}
+                    for index, value in ipairs(newblockid) do
+                        local cc = math.random(1,100)
+                        if cc <= brushParameter.percentage then
+                            local dd = undoMask(value[1],value[2],value[3])
+                            -- local result,id = Block:getBlockID(value[1],value[2],value[3])
+                            -- local result,data=Block:getBlockData(value[1],value[2],value[3])
+                            table.insert(undo_fanwei,dd)
+                        end
+                    end
+                    Record_revocation(undo_fanwei)
+                    for index, value in ipairs(undo_fanwei) do
+                        local id = brushParameter.blockid[math.random(1,#brushParameter.blockid)]
+                        setMask(value.x,value.y,value.z,id)
+                        -- if id ~= 0 then
+                        --     Block:setBlockAll(value.x,value.y,value.z,id,Towards)
+                        -- elseif id == 0 then
+                        --     Block:destroyBlock(value.x,value.y,value.z,false)
+                        -- end
+                    end
+                elseif brushParameter.mode == "b" then
+                    local newblockid = generateSphere({math.floor(x),math.floor(y),math.floor(z)},brushParameter.radius)
+                    local undo_fanwei = {}
+                    for index, value in ipairs(newblockid) do
+                        local cc = math.random(1,100)
+                        if cc <= brushParameter.percentage then
+                            local dd = undoMask(value[1],value[2],value[3])
+                            table.insert(undo_fanwei,dd)
+                        end
+                    end
+                    Record_revocation(undo_fanwei)
+                    -- 新的表用于存储转换后的坐标对
+                    local new_Brush_color_1 = {}
+                    -- 遍历原始表并展平它
+                    for _, innerTable in ipairs(Brush_color_1) do
+                        for _, point in ipairs(innerTable) do
+                            -- 直接将点插入到新表中
+                            table.insert(new_Brush_color_1, point)
+                        end
+                    end
+                    for index, value in ipairs(new_Brush_color_1) do
+                        for i, v in ipairs(undo_fanwei) do
+                            if brushParameter.Lightness == "l" then
+                                if value[1] == v.originalId and value[2] == v.Towards and index ~= 9 and index % 9 ~= 0 then--确认是不是表内部的方块
+                                    local block = new_Brush_color_1[index+1]
+                                    setMask_2(v.x,v.y,v.z,block[1],block[2])
+                                end
+                            elseif brushParameter.Lightness == "d" then
+                                if value[1] == v.originalId and value[2] == v.Towards and index ~= 10 and (index - 1) % 9 ~= 0 and index ~= 1 then--确认是不是表内部的方块
+                                    local block = new_Brush_color_1[index-1]
+                                    setMask_2(v.x,v.y,v.z,block[1],block[2])
+                                end
+                            end
+                        end
+                    end
+                elseif brushParameter.mode == "copy" then
+                    if #Pasteboard >= 1 then
+                        --记录撤回操作
+                        local undo_fanwei = {}
+                        local neweventobjid = {math.floor(x), math.floor(y), math.floor(z)}
+                        local dx = neweventobjid[1] - player_copypaste[1]
+                        local dy = neweventobjid[2] - player_copypaste[2]
+                        local dz = neweventobjid[3] - player_copypaste[3]
+                        for index, value in ipairs(Pasteboard) do
+                            local newx = value.x + dx
+                            local newy = value.y + dy
+                            local newz = value.z + dz
+                            local cc = undoMask(newx,newy,newz)
+                            table.insert(undo_fanwei, cc)
+                        end
+                        Record_revocation(undo_fanwei)
+                        for index, value in ipairs(Pasteboard) do
+                            local newx = value.x + dx
+                            local newy = value.y + dy
+                            local newz = value.z + dz
+                             local newx, newy, newz = math.floor(newx), math.floor(newy), math.floor(newz)
+                            local result,data=Block:getBlockData(newx,newy,newz)
+                            pasteMask(newx,newy,newz,value.originalId,value.Towards)
+                        end
+                    end
+                end
+                break
+            end
+        end
+    end
+end
+function mask(content)
+    local Mask,blockid = string.match(content,"(@[^%s]+)%s+(.+)")
+    if Mask == "@mask" then
+        if blockid == "list" then
+            if #gmask < 1 then
+                Chat:sendSystemMsg("#cFF7aad多利与橘喵:mask为nil喵~")
+            else
+                for index, value in ipairs(gmask) do
+                    local code, ret = Block:GetBlockDefName(tonumber(value))
+                    Chat:sendSystemMsg("#cFF7aad多利与橘喵:mask"..index..":"..ret.."id"..value.."喵~")
+                end
+            end
+        else
+            local newBlockid = setDigitalid(blockid)
+            gmask = {}
+            for index, value in ipairs(newBlockid) do
+                table.insert(gmask,value)
+            end
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:mask设置完成喵~")
+        end
+    end
+end
+function undoMask(x,y,z)
+    local undo_fanwei = {}
+    local result,id = Block:getBlockID(x,y,z)
+    local result,data=Block:getBlockData(x,y,z)
+    if #gmask == 0 then
+        undo_fanwei = {originalId = id, x = x,y = y,z = z,Towards = data}
+    else
+        for index, value in ipairs(gmask) do
+            if tonumber(value) == id then
+                undo_fanwei = {originalId = id, x = x,y = y,z = z,Towards = data}
+            end
+        end
+    end
+    return undo_fanwei
+end
+function setMask(x,y,z,id)
+    id = tonumber(id)
+    if #gmask == 0 then
+        if id == 0 then
+            Block:destroyBlock(x,y,z,false)
+        elseif id ~= 0 then
+            Block:setBlockAll(x,y,z,id,Towards)
+        end
+    else
+        for index, value in ipairs(gmask) do
+            local result,orid = Block:getBlockID(x,y,z)
+            if tonumber(value) == orid then
+                if id == 0 then
+                    Block:destroyBlock(x,y,z,false)
+                elseif id ~= 0 then
+                    Block:setBlockAll(x,y,z,id,Towards)
+                end
+            end
+        end
+    end
+end
+function setMask_2(x,y,z,id,data)
+    id = tonumber(id)
+    if #gmask == 0 then
+        if id == 0 then
+            Block:destroyBlock(x,y,z,false)
+        elseif id ~= 0 then
+            Block:setBlockAll(x,y,z,id,data)
+        end
+    else
+        for index, value in ipairs(gmask) do
+            local result,orid = Block:getBlockID(x,y,z)
+            if tonumber(value) == orid then
+                if id == 0 then
+                    Block:destroyBlock(x,y,z,false)
+                elseif id ~= 0 then
+                    Block:setBlockAll(x,y,z,id,data)
+                end
+            end
+        end
+    end
+end
+function pasteMask(x,y,z,id,data)
+    if #gmask == 0 then
+        Block:setBlockAll(x,y,z,id,data)
+    else
+        for index, value in ipairs(gmask) do
+            local result,orid = Block:getBlockID(x,y,z)
+            if tonumber(value) == orid then
+                Block:setBlockAll(x,y,z,id,data)
+            end
+        end
+    end
+end
+function setDigital(content)
+    local SetDigital,order,id = string.match(content,"(@[^%s]+)%s+(%d+)%s+(%d+)")
+    local Set,list = string.match(content,"(@[^%s]+)%s+(%w+)")
+    if list == "list" and Set == "@id" then
+        for index, value in ipairs(Digital_storage) do
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:数字板"..index..":"..value.."喵~")
+        end
+    else
+        if SetDigital == "@id" then
+            id = tonumber(id)
+            order = tonumber(order)
+            if id == nil then
+                id = 0
+            end
+            for i = 1, 10, 1 do
+                if i == order then
+                    Digital_storage[order] = id
+                    Chat:sendSystemMsg("#cFF7aad多利与橘喵:当前数字板"..order.."id"..id.."喵~")
+                end
+            end
+        end
+    end
+end
+function setDigitalid(storage)
+    local newDigitalid = {}
+    for number in string.gmatch(storage,"%w+") do
+        table.insert(newDigitalid,number)
+    end
+    for index, value in ipairs(newDigitalid) do
+        if value == "id1" then
+            newDigitalid[index] = Digital_storage[1]
+        elseif value == "id2" then
+            newDigitalid[index] = Digital_storage[2]
+        elseif value == "id3" then
+            newDigitalid[index] = Digital_storage[3]
+        elseif value == "id4" then
+            newDigitalid[index] = Digital_storage[4]
+        elseif value == "id5" then
+            newDigitalid[index] = Digital_storage[5]
+        elseif value == "id6" then
+            newDigitalid[index] = Digital_storage[6]
+        elseif value == "id7" then
+            newDigitalid[index] = Digital_storage[7]
+        elseif value == "id8" then
+            newDigitalid[index] = Digital_storage[8]
+        elseif value == "id9" then
+            newDigitalid[index] = Digital_storage[9]
+        elseif value == "id10" then
+            newDigitalid[index] = Digital_storage[10]
+        end
+    end
+    for index, value in ipairs(newDigitalid) do
+        value = tonumber(value)
+        if value == nil then
+            newDigitalid[index] = 0
+        end
+    end
+    return newDigitalid
+end
+function setloft_1(x,y,z)
+    x = tonumber(x)
+    y = tonumber(y)
+    z = tonumber(z)
+    local result,id=Player:getCurToolID(0)
+    if #loft_period ~= 0 then
+        if id == 11001 then
+            loft_vfx(x,y,z,1)
+            table.insert(loft_period[#loft_period],{x,y,z})
+            Chat:sendSystemMsg("#cFF7aad多利与橘喵:loft衍生点完成喵~")
+        end
+    else
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:loft未设置起始loft点喵~")
+    end
+    if id == 11002 then
+        loft_vfx(x,y,z,1)
+        table.insert(loft_period,{})
+        table.insert(loft_period[#loft_period],{x,y,z})
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:loft起始点完成喵~")
+    end
+end
+function loft_2(content)
+    local Loft = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Loft,number)
+    end
+    local Loft_name = Loft[1]
+    local blockid = Loft[2]
+    if Loft_name == "@loft" then
+        local newBlockid = setDigitalid(blockid)
+        local newLoft = loft_line(loft_period)
+        local undo_fanwei = {}
+        for index, value in ipairs(newLoft) do
+            for i, v in ipairs(value) do
+                local cc = undoMask(v[1],v[2],v[3])
+                table.insert(undo_fanwei,cc)
+            end
+        end
+        Record_revocation(undo_fanwei)
+        for index, value in ipairs(newLoft) do
+            for i, v in ipairs(value) do
+                local id = newBlockid[math.random(1,#newBlockid)]
+                setMask(v[1],v[2],v[3],id)
+            end
+        end
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:loft操作完成喵~")
+    end
+end
+function loft_line(loft_per)
+    local newLine_1 = {}--存储关键曲线
+    for index, value in ipairs(loft_per) do
+        local cc = generateCurve(value)
+        table.insert(newLine_1,cc)
+    end
+    --比较哪一条曲线比较长
+    local maxLength = 0
+    for index, value in ipairs(newLine_1) do
+        if #value > maxLength then
+            maxLength = #value
+        end
+    end
+    --补充其他曲线长度
+    for index, value in ipairs(newLine_1) do
+        if #value < maxLength then
+            for i = 0, maxLength - #value - 1, 1 do
+                table.insert(newLine_1[index],i+i+1,value[i+i+1])
+            end
+        end
+    end
+    local newSurface = {}--存储最终的曲面坐标
+    for i = 1, #newLine_1[1], 1 do
+        local dd = {}
+        for index, value in ipairs(newLine_1) do
+            table.insert(dd,value[i])
+        end
+        local yy = generateCurve(dd)
+        table.insert(newSurface,yy)
+    end
+    return newSurface
+end
+function loft_vfx(x,y,z,loft)
+    if loft == 1 then
+        World:playParticalEffect(x,y,z,1267,1)
+    end
+    if loft == 2 then
+        local new_loft = {}
+        -- 遍历原始表并展平它
+        for _, innerTable in ipairs(loft_period) do
+            for _, point in ipairs(innerTable) do
+                -- 直接将点插入到新表中
+                table.insert(new_loft, point)
+            end
+        end
+        for index, value in ipairs(new_loft) do
+            World:stopEffectOnPosition(value[1],value[2],value[3],1267)
+        end
+    end
+end
+function surface(content)
+    local Sur = {}
+    for number in string.gmatch(content,"%S+") do
+        table.insert(Sur,number)
+    end
+    local Surface = Sur[1]
+    local direction = Sur[2]
+    local stacks = tonumber(Sur[3])
+    local blockid_1 = Sur[4]
+    local blockid_2 = Sur[5]
+    if Surface == "@surface" then
+        local dir = {}
+        if direction == "n" then dir = {0,0,1}
+        elseif direction == "s" then dir = {0,0,-1}
+        elseif direction == "e" then dir = {1,0,0}
+        elseif direction == "w" then dir = {-1,0,0}
+        elseif direction == "u" then dir = {0,1,0}
+        elseif direction == "d" then dir = {0,-1,0}
+        end
+        local min_x = math.min(pos1[1], pos2[1])
+        local max_x = math.max(pos1[1], pos2[1])
+        local min_y = math.min(pos1[2], pos2[2])
+        local max_y = math.max(pos1[2], pos2[2])
+        local min_z = math.min(pos1[3], pos2[3])
+        local max_z = math.max(pos1[3], pos2[3])
+        local newBlockid = {}
+        if blockid_2 ~= nil then
+            newBlockid = setDigitalid(blockid_2)
+        end
+        local newSurface = {}
+        for x = min_x, max_x, 1 do
+            for y = min_y, max_y, 1 do
+                for z = min_z, max_z, 1 do
+                    local result,id = Block:getBlockID(x,y,z)
+                    local result,data=Block:getBlockData(x,y,z)
+                    if blockid_2 == nil then
+                        if id ~= 0 then
+                            table.insert(newSurface,{id = id,x = x,y = y,z = z,data = data})
+                        end
+                    else
+                        for index, value in ipairs(newBlockid) do
+                            if tonumber(value) == tonumber(id) then
+                                table.insert(newSurface,{id = id,x = x,y = y,z = z,data = data})
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        local newSurface_2 = {}
+        for i = 1, stacks, 1 do
+            local newDir = {}
+            for index, value in ipairs(dir) do
+                table.insert(newDir,value*i)
+            end
+            for index, value in ipairs(newSurface) do
+                local result,id = Block:getBlockID(value.x + newDir[1],value.y + newDir[2],value.z + newDir[3])
+                if id == 0 then
+                    table.insert(newSurface_2,{x = value.x + newDir[1],y = value.y + newDir[2],z = value.z + newDir[3]})
+                end
+            end
+        end
+        local undo_fanwei = {}
+        for index, value in ipairs(newSurface_2) do
+            local cc = undoMask(value.x,value.y,value.z)
+            table.insert(undo_fanwei,cc)
+        end
+        Record_revocation(undo_fanwei)
+        local blockid_3 = setDigitalid(blockid_1)
+        for index, value in ipairs(newSurface_2) do
+            setMask(value.x,value.y,value.z,blockid_3[math.random(1,#blockid_3)])
+        end
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:surface操作完成喵~")
+    end
+end
+function hollow(content)
+    if content == "@hollow" then
+        local min_x = math.min(pos1[1], pos2[1])
+        local max_x = math.max(pos1[1], pos2[1])
+        local min_y = math.min(pos1[2], pos2[2])
+        local max_y = math.max(pos1[2], pos2[2])
+        local min_z = math.min(pos1[3], pos2[3])
+        local max_z = math.max(pos1[3], pos2[3])
+        local hollow_fanwei = {}
+        for x = min_x, max_x, 1 do
+            for y = min_y, max_y, 1 do
+                for z = min_z, max_z, 1 do
+                    local result,id = Block:getBlockID(x,y,z)
+                    if id ~= 0 then
+                        table.insert(hollow_fanwei,{x = x ,y = y,z = z})
+                    end
+                end
+            end
+        end
+        local newHollow = {}
+        for index, value in ipairs(hollow_fanwei) do
+            local x = value.x
+            local y = value.y
+            local z = value.z
+            local result,id_u = Block:getBlockID(x,y+1,z)
+            if id_u ~= 0 then
+                local result,id_d = Block:getBlockID(x,y-1,z)
+                if id_d ~= 0 then
+                    local result,id_e = Block:getBlockID(x+1,y,z)
+                    if id_e ~= 0 then
+                        local result,id_w = Block:getBlockID(x-1,y,z)
+                        if id_w ~= 0 then
+                            local result,id_n = Block:getBlockID(x,y,z+1)
+                            if id_n ~= 0 then
+                                local result,id_s = Block:getBlockID(x,y,z-1)
+                                if id_s ~= 0 then
+                                    table.insert(newHollow,{x = x,y = y,z = z})
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        local undo_fanwei = {}
+        for index, value in ipairs(newHollow) do
+            local cc = undoMask(value.x,value.y,value.z)
+            table.insert(undo_fanwei,cc)
+        end
+        Record_revocation(undo_fanwei)
+        for index, value in ipairs(newHollow) do
+            setMask(value.x,value.y,value.z,0)
+        end
+        Chat:sendSystemMsg("#cFF7aad多利与橘喵:hollow操作完成喵~")
+    end
+end
+--玩家使用道具
+function Player_UseItem(a)
+    brush(a.eventobjid)
+    pos_2(a.eventobjid)
+end
+--玩家点击方块
+function Player_ClickBlock(a)
+    pos_1(a.x,a.y,a.z)
+    blockid(a.x,a.y,a.z)
+    setLine(a.x,a.y,a.z)
+    setloft_1(a.x,a.y,a.z)
+end
+--玩家输入字符串
+function Player_NewInputContent(a)
+    playerMove(a.content,a.eventobjid)
+    speed(a.content,a.eventobjid)
+    pos_3(a.content,a.eventobjid)
+    clear(a.content)
+    set(a.content)
+    setTowards(a.content)
+    copy(a.content,a.eventobjid)
+    paste(a.content,a.eventobjid)
+    rotate(a.content)
+    undo(a.content)
+    redo(a.content)
+    flip(a.content,a.eventobjid)
+    sphere(a.content,a.eventobjid)
+    stack(a.content,a.eventobjid)
+    move(a.content,a.eventobjid)
+    smear(a.content,a.eventobjid)
+    replace(a.content)
+    cyl(a.content)
+    hcyl(a.content)
+    setLine_2(a.content,a.eventobjid)
+    line(a.content)
+    spike(a.content)
+    setBrush(a.content)
+    brush(a.content)
+    setMask(a.content)
+    mask(a.content)
+    setDigital(a.content)
+    loft_2(a.content)
+    surface(a.content)
+    hollow(a.content)
+end
+ScriptSupportEvent:registerEvent("Player.UseItem",Player_UseItem)
+ScriptSupportEvent:registerEvent("Player.ClickBlock",Player_ClickBlock)
+ScriptSupportEvent:registerEvent("Player.NewInputContent",Player_NewInputContent)
